@@ -9,6 +9,7 @@ from settings import *
 
 from faker import Faker
 from tqdm import tqdm
+from sklearn.metrics import brier_score_loss
 
 fake = Faker()
 
@@ -24,7 +25,7 @@ def play_games(schedule):
     game_var = season_settings['game_var']
     skill_gap = schedule_settings['skill_gap_cutoff']
 
-    # if skip is true, skill gap too large and must not record data
+    # if skip is true, skill gap too large will not record data
     skip = False
 
     for gp, i in tqdm(enumerate(range(schedule.num_games))):
@@ -193,6 +194,8 @@ def run_season():
 if __name__ == "__main__":
 
     run_season()
+
+    # multiple seasons used for testing parameters
     # print("Starting...")
     # table_array = []
     # for i in range(146):

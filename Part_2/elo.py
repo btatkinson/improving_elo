@@ -6,12 +6,12 @@ from settings import *
 
 class Elo(object):
 
-    k = elo_set['K']
     beta = elo_set['beta']
 
     """docstring for Elo."""
-    def __init__(self):
+    def __init__(self,K=7):
         super(Elo, self).__init__()
+        self.K = K
 
     def get_expected_prob(self, elo_diff):
         # glitches if I don't use math.pow instead of 10 **
@@ -19,15 +19,16 @@ class Elo(object):
         ep = 1/(1 + math.pow(10,(-elo_diff / self.beta)))
         return ep
 
-    def get_delta(self, result, prob):
-        return self.k * (result - prob)
+    def get_delta(self, result, prob, K):
+        return K * (result - prob)
 
-    def get_mov_delta(self, result, prob, gamma):
-        return (self.k * gamma) * (result - prob)
+    def get_mov_delta(self, result, prob, elo_diff, K):
+        gamma = self.get_gamma(result, elo_diff)
+        return (K * gamma) * (result - prob)
 
     # get margin of victory multiplier
     def get_movm(self, elo_diff):
-        return np.log(max(elo_diff, 1) + 1.0)
+        return np.log(max(abs(elo_diff), 1) + 1.0)
 
     def get_acp(self, result, elo_diff):
         return (2.2 / (1.0 if result == 0.5 else ((elo_diff if result == 1.0 else -elo_diff) * 0.001 + 2.2)))

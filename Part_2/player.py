@@ -1,4 +1,8 @@
 import random
+import numpy as np
+import pandas as pd
+
+from glicko2 import Glicko2
 
 from settings import *
 from faker import Faker
@@ -6,8 +10,6 @@ from faker import Faker
 fake = Faker()
 
 class Player(object):
-
-    # import initial settings
 
     """This is the Player class."""
     def __init__(self):
@@ -19,6 +21,8 @@ class Player(object):
         self.mu = self.get_mu()
         self.phi = self.get_phi()
         self.win_pct = self.get_win_pct()
+        self.glicko_opps = []
+        self.combo_opps = []
 
     def initialize_ratings(self):
 
@@ -32,7 +36,8 @@ class Player(object):
         # preseason rating
         self.prior = random.gauss(self.rating, pre_sd)
         # convert prior to elo rating
-        self.prior = 
+        # found with linear regression
+        self.prior = (self.prior*43.051 - 2792.5)
 
         # elo
         self.elo = elo_set['initial']
@@ -49,6 +54,7 @@ class Player(object):
         self.combo = self.prior
         self.cRD = combo_set['RD']
         self.cVol = combo_set['vol']
+
         return
 
     def initialize_record(self):
@@ -90,14 +96,57 @@ class Player(object):
 
     def add_win(self):
         self.wins += 1
+        self.win_pct = self.get_win_pct()
         return
 
     def add_loss(self):
         self.losses += 1
+        self.win_pct = self.get_win_pct()
         return
 
-    def add_ties(self):
+    def add_tie(self):
         self.ties += 1
+        self.win_pct = self.get_win_pct()
+        return
+
+    def add_errors(self, result, error_dict):
+        self.wl_error += ((result - error_dict["wl"])**2)
+        self.wlm_error += ((result - error_dict["wlm"])**2)
+        self.elo_error += ((result - error_dict["elo"])**2)
+        self.prior_error += ((result - error_dict["prior"])**2)
+        self.mov_error += ((result - error_dict["mov"])**2)
+        self.glicko_error += ((result - error_dict["glicko"])**2)
+        self.combo_error += ((result - error_dict["combo"])**2)
+
+
+        return
+
+    def add_glicko_opp(self, opp):
+        self.glicko_opps.append(opp)
+        return
+
+    def add_combo_opp(self, opp):
+        self.combo_opps.append(opp)
+        return
+
+    def resolve_glicko(self):
+        env = Glicko2(tau=glicko_set['tau'])
+        player_rating = env.create_rating(self.glicko, self.RD, self.vol)
+        new_rating = env.rate(player_rating, self.glicko_opps)
+        self.glicko = new_rating.glicko
+        self.RD = new_rating.RD
+        self.vol = new_rating.vol
+        self.glicko_opps = []
+        return new_rating
+
+    def resolve_combo(self):
+        env = Glicko2(tau=combo_set['tau'])
+        player_rating = env.create_rating(self.combo, self.cRD, self.cVol)
+        new_rating = env.rate(player_rating, self.combo_opps)
+        self.combo = new_rating.glicko
+        self.cRD = new_rating.RD
+        self.cVol = new_rating.vol
+        self.combo_opps = []
         return
 
 

@@ -86,8 +86,9 @@ def run_season():
     df = pd.DataFrame(table_array, columns=cols)
     df = df.sort_values(by='Rating', ascending=False)
 
-    df = df[['Name', 'Rating', 'Prior', 'Elo', 'MOV', 'Glicko', 'Combo']]
-    print(df.head())
+    df = df[['Name', 'Rating', 'Wins', 'Losses', 'Ties', 'Elo', 'MOV']]
+
+    print(df)
 
     # create schedule
     # must create rating periods for Glicko
@@ -120,6 +121,20 @@ def run_season():
             error_entry = calc_error(players, week)
             error_array.append(error_entry)
 
+            # check on max skill gap at end of week
+            max_skill_gap = league_set['max_skill_gap']
+            p_max = 0
+            p_min = player_set['initial']
+            for p in players:
+                rtg = p.rating
+                if p_max < rtg:
+                    p_max = rtg
+                elif p_min > rtg:
+                    p_min = rtg
+
+            if p_max - p_min > max_skill_gap:
+                raise ValueError("Season was cut short after " + str(week) + " weeks because of skill gap")
+
     error_table = pd.DataFrame(error_array, columns=['Week', 'WL', 'WLM', 'Elo', 'Prior',
     'MOV', 'Glicko', 'Combo'])
 
@@ -135,15 +150,41 @@ def run_season():
     df = df.drop(columns=["G_OPPS","C_OPPS"])
     df = df.sort_values(by='Rating', ascending=False)
 
-    df = df[['Name', 'Rating', 'Prior', 'Elo', 'MOV', 'Glicko', 'Combo']]
-    print(df.head())
+    df = df[['Name', 'Rating', 'Wins', 'Losses', 'Ties', 'Elo', 'MOV', 'Elo Error', 'MOV Error']]
+    df = df.round(1)
 
-    return
+    print(df)
+
+    mov_error = df['MOV Error'].sum()
+    elo_error = df['Elo Error'].sum()
+
+    return elo_error, mov_error
 
 
 if __name__ == "__main__":
+    # run one
+    ee, me = run_season()
+    print(ee, me)
+    e_avg = np.round(ee/(32*82),5)
+    m_avg = np.round(me/(32*82),5)
+    print("Average elo error was " + str(e_avg))
+    print("Average mov error was " + str(m_avg))
+    print("Difference was " + str(np.round(e_avg - m_avg,5)*100))
 
-    run_season()
+    # run multiple
+    # elo_errors = []
+    # mov_errors = []
+    # for i in tqdm(range(5)):
+    #     ee, move = run_season()
+    #     elo_errors.append(ee)
+    #     mov_errors.append(move)
+    # e_avg = sum(elo_errors)/len(elo_errors)
+    # m_avg = sum(mov_errors)/len(mov_errors)
+    # e_avg = np.round(e_avg/(32*82),5)
+    # m_avg = np.round(m_avg/(32*82),5)
+    # print("Average elo error was " + str(e_avg))
+    # print("Average mov error was " + str(m_avg))
+    # print("Difference was " + str(np.round(e_avg - m_avg,5)*100))
 
 
 

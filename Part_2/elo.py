@@ -7,6 +7,8 @@ from settings import *
 class Elo(object):
 
     beta = elo_set['beta']
+    acp = mov_set['ACP']
+    mov_c = mov_set['C']
 
     """docstring for Elo."""
     def __init__(self,K=7):
@@ -22,19 +24,19 @@ class Elo(object):
     def get_delta(self, result, prob, K):
         return K * (result - prob)
 
-    def get_mov_delta(self, result, prob, elo_diff, K):
-        gamma = self.get_gamma(result, elo_diff)
+    def get_mov_delta(self, result, prob, score_diff, elo_diff, K):
+        gamma = self.get_gamma(result, score_diff, elo_diff)
         return (K * gamma) * (result - prob)
 
     # get margin of victory multiplier
-    def get_movm(self, elo_diff):
-        return np.log(max(abs(elo_diff), 1) + 1.0)
+    def get_movm(self, score_diff):
+        return np.log(max(abs(score_diff), 1) + 1.0)
 
     def get_acp(self, result, elo_diff):
-        return (2.2 / (1.0 if result == 0.5 else ((elo_diff if result == 1.0 else -elo_diff) * 0.001 + 2.2)))
+        return (self.mov_c / (1.0 if result == 0.5 else ((elo_diff if result == 1.0 else -elo_diff) * self.acp + self.mov_c)))
 
-    def get_gamma(self, result, elo_diff):
-        movm = self.get_movm(elo_diff)
+    def get_gamma(self, result, score_diff, elo_diff):
+        movm = self.get_movm(score_diff)
         acp = self.get_acp(result, elo_diff)
         return movm * acp
 

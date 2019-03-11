@@ -3,36 +3,41 @@ player_set = {
     # average "true rating"
     'initial':100,
     # standard deviation of player ratings
-    'std_dev': 4
+    'std_dev': 4.8
 }
 
 league_set = {
-    'size':64,
+    'size':32,
+    'max_skill_gap':38
 }
 
 schedule_set = {
-    'weeks':165,
+    'weeks':82,
     # suggested is 5-10 games per player, so 10-20 weeks
     'rating_period': 15,
     'players_per_week':32,
-    'daily_nudge':0.1
+    'daily_nudge':0.2
 }
 
 game_set = {
     # game by game score variation amount
     # higher means more upsets
-    'var':4
+    'var':10
 }
 
 
 elo_set = {
     'initial': 1500,
-    'K': 7,
+    'K': 27.5,
     'beta':400
 }
 
 mov_set = {
-    'K':7
+    'initial': 1500,
+    'K':9,
+    'ACP':0,
+    'C':3.3,
+    'beta':400
 }
 
 glicko_set = {

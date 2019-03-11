@@ -97,6 +97,7 @@ class Game(object):
         # get result
         self.p1.add_gp()
         self.p2.add_gp()
+        self.score_diff = abs(self.p1_score - self.p2_score)
         if self.p1_score > self.p2_score:
             self.p1_outcome = 1
             self.p2_outcome = 0
@@ -141,7 +142,7 @@ class Game(object):
         # update Elo rankings
         elo_delta = elo.get_delta(self.p1_outcome, p1_elox, elo_K)
         prior_delta = elo.get_delta(self.p1_outcome, p1_priorx, prior_K)
-        mov_delta = elo.get_mov_delta(self.p1_outcome, p1_movx, (self.p1.mov-self.p2.mov), mov_K)
+        mov_delta = elo.get_mov_delta(self.p1_outcome, p1_movx, self.score_diff, (self.p1.mov-self.p2.mov), mov_K)
 
         self.p1.elo += elo_delta
         self.p1.prior += prior_delta

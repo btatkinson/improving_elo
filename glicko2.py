@@ -128,10 +128,10 @@ class Glicko2(object):
             d_square_inv += (
                 expected_score * (1 - expected_score) *
                 (Q ** 2) * (impact ** 2))
-        difference /= variance_inv
-        variance = 1. / variance_inv
+        difference /= (variance_inv + epsilon)
+        variance = 1. / (variance_inv + epsilon)
         denom = rating.phi ** -2 + d_square_inv
-        mu = rating.mu + Q / denom * (difference / variance_inv)
+        mu = rating.mu + Q / denom * (difference / (variance_inv+epsilon))
         phi = math.sqrt(1 / denom)
         # Step 5. Determine the new value, vol', or the volatility. This
         #         computation requires iteration.

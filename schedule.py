@@ -11,7 +11,7 @@ class Schedule(object):
         self.weeks = schedule_set['weeks']
         self.ppw = schedule_set['players_per_week']
         self.nudge = schedule_set['daily_nudge']
-        self.rating_period = schedule_set['rating_period']
+        self.rating_period = glicko_set['rating_period']
 
     def create_calendar(self):
         self.calendar = []

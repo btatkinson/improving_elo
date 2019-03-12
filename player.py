@@ -51,7 +51,9 @@ class Player(object):
         self.vol = glicko_set['vol']
 
         # combo
-        self.combo = self.prior
+        pre_sd = combo_set['preseason']
+        self.combo = random.gauss(self.rating, pre_sd)
+        self.combo = (self.combo*43.051 - 2792.5)
         self.cRD = combo_set['RD']
         self.cVol = combo_set['vol']
 

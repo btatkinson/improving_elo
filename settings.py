@@ -13,10 +13,8 @@ league_set = {
 
 schedule_set = {
     'weeks':82,
-    # suggested is 5-10 games per player, so 10-20 weeks
-    'rating_period': 15,
     'players_per_week':32,
-    'daily_nudge':0.2
+    'daily_nudge':0.1
 }
 
 game_set = {
@@ -42,27 +40,31 @@ mov_set = {
 
 glicko_set = {
     'initial': 1500,
-    'RD': 350,
-    'tau': 0.7,
+    'RD': 100,
+    'tau': 4,
     'vol': .06,
     'epsilon':0.000001,
-    'ratio':173.7178
+    'ratio':173.7178,
+    # suggested is 5-10 games per player, so 10-20 weeks
+    'rating_period': 2
 }
 
 prior_set = {
     # inaccuracy of preseason ratings (higher -> more inaccurate)
-    # usually use about half of the std_dev
-    'preseason': 2,
-    # should use smaller K than Elo
-    'K': 7
+    # usually use about 1/5 of the std_dev
+    'preseason': 0.65,
+    # should use similar K than Elo, maybe a hair smaller
+    'K': 27.45
 }
 
 combo_set = {
     'initial': 1500,
-    'RD': 350,
-    'tau': .7,
+    'RD': 100,
+    'tau': 4,
     'vol': .06,
-    'preseason': 2
+    'preseason': 0.65,
+    # suggested is 5-10 games per player, so 10-20 weeks
+    # 'rating_period': 15
 }
 
 

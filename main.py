@@ -88,7 +88,7 @@ def run_season():
 
     df = df[['Name', 'Rating', 'Wins', 'Losses', 'Ties', 'Elo', 'MOV']]
 
-    print(df)
+    # print(df)
 
     # create schedule
     # must create rating periods for Glicko
@@ -150,41 +150,52 @@ def run_season():
     df = df.drop(columns=["G_OPPS","C_OPPS"])
     df = df.sort_values(by='Rating', ascending=False)
 
-    df = df[['Name', 'Rating', 'Wins', 'Losses', 'Ties', 'Elo', 'MOV', 'Elo Error', 'MOV Error']]
-    df = df.round(1)
+    # df = df[['Name', 'Rating', 'Wins', 'Losses', 'Ties', 'Elo', 'Glicko', 'Elo Error', 'Glicko Error']]
+    # df = df.round(1)
 
-    print(df)
-
-    mov_error = df['MOV Error'].sum()
+    wlm_error = df['WLM Error'].sum()
     elo_error = df['Elo Error'].sum()
+    mov_error = df['MOV Error'].sum()
+    prior_error = df['Prior Error'].sum()
+    glicko_error = df['Glicko Error'].sum()
+    combo_error = df['Combo Error'].sum()
 
-    return elo_error, mov_error
+    wlm_avg = np.round(wlm_error/(32*82),5)
+    e_avg = np.round(elo_error/(32*82),5)
+    mov_avg = np.round(mov_error/(32*82),5)
+    p_avg = np.round(prior_error/(32*82),5)
+    g_avg = np.round(glicko_error/(32*82),5)
+    c_avg = np.round(combo_error/(32*82),5)
+    print("Win Loss Margin Error: ", wlm_avg)
+    print("Elo Error: ", e_avg)
+    print("MOV Error: ", mov_avg)
+    print("Prior Error: ", p_avg)
+    print("Glicko Error: ", g_avg)
+    print("Combo Error: ", c_avg)
+
+    # print(df)
+
+    return
 
 
 if __name__ == "__main__":
     # run one
-    ee, me = run_season()
-    print(ee, me)
-    e_avg = np.round(ee/(32*82),5)
-    m_avg = np.round(me/(32*82),5)
-    print("Average elo error was " + str(e_avg))
-    print("Average mov error was " + str(m_avg))
-    print("Difference was " + str(np.round(e_avg - m_avg,5)*100))
+    run_season()
 
     # run multiple
     # elo_errors = []
-    # mov_errors = []
+    # prior_errors = []
     # for i in tqdm(range(5)):
-    #     ee, move = run_season()
+    #     ee, priore = run_season()
     #     elo_errors.append(ee)
-    #     mov_errors.append(move)
+    #     prior_errors.append(priore)
     # e_avg = sum(elo_errors)/len(elo_errors)
-    # m_avg = sum(mov_errors)/len(mov_errors)
+    # p_avg = sum(prior_errors)/len(prior_errors)
     # e_avg = np.round(e_avg/(32*82),5)
-    # m_avg = np.round(m_avg/(32*82),5)
+    # p_avg = np.round(p_avg/(32*82),5)
     # print("Average elo error was " + str(e_avg))
-    # print("Average mov error was " + str(m_avg))
-    # print("Difference was " + str(np.round(e_avg - m_avg,5)*100))
+    # print("Average glicko error was " + str(p_avg))
+    # print("Difference was " + str(np.round(e_avg - p_avg,5)*100))
 
 
 

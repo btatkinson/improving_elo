@@ -9,6 +9,7 @@ from team import Team
 from elo import Elo
 from glicko import Glicko
 from steph import Steph
+from settings import *
 
 from tqdm import tqdm
 
@@ -48,6 +49,9 @@ def test_systems():
     # separate data into individual seasons
     seasons = list(sdf.Season.unique())
 
+    # set how long before glicko updates
+    g_resolve = glicko_set['resolve_time']
+
     # track error per season
     sea_error = []
     wkbywk_err = None
@@ -70,6 +74,30 @@ def test_systems():
         elo = Elo()
         glicko = Glicko()
         steph = Steph()
+
+        # test glicko
+        # team1 = Team(1)
+        # t2 = Team(2)
+        # t3 = Team(3)
+        # t4 = Team(4)
+        #
+        # team1.glicko = 1500
+        # t2.glicko = 1400
+        # t3.glicko = 1550
+        # t4.glicko = 1700
+        #
+        # team1.g_phi = 200
+        # t2.g_phi = 30
+        # t3.g_phi = 100
+        # t4.g_phi = 300
+        #
+        # team1.add_glicko_opp(t2,1)
+        # team1.add_glicko_opp(t3,0)
+        # team1.add_glicko_opp(t4,0)
+        #
+        # team1 = glicko.update(team1)
+        # print(team1.glicko, team1.g_phi, team1.g_sigma)
+        # raise ValueError
 
         # track error per week
         week_err = []
@@ -135,6 +163,8 @@ def test_systems():
             wk_serr += t1_errors[4]
 
             # update ratings
+
+            # elo
             elo_delta = elo.get_delta(elo_expect)
             t1_ielo_delta, t2_ielo_delta = elo.get_ielo_delta(ielo_expect, margin, team1, team2)
 
@@ -144,8 +174,20 @@ def test_systems():
             team2.update_rating("elo", -elo_delta)
             team2.update_rating("ielo", t2_ielo_delta)
 
+            # log5
+
             team1.add_win()
             team2.add_loss()
+
+            # glicko
+            team1.add_glicko_opp(team2, 1)
+            team2.add_glicko_opp(team1, 0)
+
+            # check if time to resolve
+            if team1.gp % g_resolve == 0:
+                team1 = glicko.update(team1)
+            if team2.gp % g_resolve == 0:
+                team2 = glicko.update(team2)
 
             team_dir[t1] = team1
             team_dir[t2] = team2

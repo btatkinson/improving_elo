@@ -22,6 +22,8 @@ class Team(object):
         self.init_ratings()
         self.init_errors()
 
+        self.glicko_opp = []
+
     def init_ratings(self):
         self.gp = 0
         self.wins = 0
@@ -31,7 +33,11 @@ class Team(object):
 
         self.elo = elo_set['init']
         self.ielo = ielo_set['init']
+
         self.glicko = glicko_set['init']
+        self.g_phi = glicko_set['phi']
+        self.g_sigma = glicko_set['sigma']
+
         self.steph = steph_set['init']
         return
 
@@ -67,6 +73,10 @@ class Team(object):
         self.wl = (self.wins + 0.5*self.ties)/self.gp
         return
 
+    def add_glicko_opp(self, opp, result):
+        self.glicko_opp.append([opp,result])
+        return
+
     def update_errors(self, errors):
         self.l5err += errors[0]
         self.eloerr += errors[1]
@@ -74,15 +84,12 @@ class Team(object):
         self.glickoerr += errors[3]
         self.stepherr += errors[4]
         return
+
     def update_rating(self, rating, delta):
         if rating == 'elo':
             self.elo += delta
         elif rating == 'ielo':
             self.ielo += delta
-        elif rating == 'glicko':
-            self.glicko += delta
-        elif rating == 'steph':
-            self.steph += delta
         return
 
 

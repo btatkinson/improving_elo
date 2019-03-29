@@ -1,3 +1,4 @@
+import math
 
 elo_set = {
     'init':1500,
@@ -15,6 +16,11 @@ ielo_set = {
 
 glicko_set = {
     'init':1500,
+    'phi':350,
+    'sigma':0.06,
+    'tau':1,
+    'epsilon':0.000001,
+    'resolve_time':4
 }
 
 steph_set = {

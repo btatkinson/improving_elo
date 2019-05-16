@@ -1,9 +1,20 @@
 import numpy as np
 import pandas as pd
+import math
+import itertools
 
 from settings import *
 
+from trueskill import *
 from math import log
+
+# define trueskill environment
+ts_env = TrueSkill(mu=trueskill_set['mu'],
+                    sigma=trueskill_set['sigma'],
+                    beta=trueskill_set['beta'],
+                    tau=trueskill_set['tau'],
+                    draw_probability=trueskill_set['draw_probability'])
+ts_env.make_as_global()
 
 def log_loss(true, pred, eps=1e-15):
     p = np.clip(pred, eps, 1-eps)
@@ -38,7 +49,7 @@ class Team(object):
         self.g_phi = glicko_set['phi']
         self.g_sigma = glicko_set['sigma']
 
-        self.steph = steph_set['init']
+        self.tskill = ts_env.create_rating()
         return
 
     def init_errors(self):
@@ -46,7 +57,7 @@ class Team(object):
         self.eloerr = 0
         self.ieloerr = 0
         self.glickoerr = 0
-        self.stepherr = 0
+        self.tserr = 0
         return
 
     def played_game(self):
@@ -82,14 +93,23 @@ class Team(object):
         self.eloerr += errors[1]
         self.ieloerr += errors[2]
         self.glickoerr += errors[3]
-        self.stepherr += errors[4]
+        self.tserr += errors[4]
         return
 
-    def update_rating(self, rating, delta):
+    def update_rating(self, rating, delta, result=0):
         if rating == 'elo':
             self.elo += delta
         elif rating == 'ielo':
             self.ielo += delta
+        return
+
+    def update_ts(self, opp, result):
+        if result == "won":
+            new_r1, new_r2 = rate_1vs1(self.tskill, opp)
+        elif result == "lost":
+            new_r2, new_r1 = rate_1vs1(self.tskill, opp)
+
+        self.tskill = new_r1
         return
 
 

@@ -1,45 +1,53 @@
 import numpy as np
 import pandas as pd
 import sys
+import itertools
+import math
 
-from math import log
+from helpers import *
+from settings import *
 
 sys.path.insert(0, './classes')
 from team import Team
 from elo import Elo
 from glicko import Glicko
-from steph import Steph
-from settings import *
 
+from rpy2.robjects.packages import importr
 from tqdm import tqdm
+from trueskill import *
+
+# define trueskill environment
+ts_env = TrueSkill(mu=trueskill_set['mu'],
+                    sigma=trueskill_set['sigma'],
+                    beta=trueskill_set['beta'],
+                    tau=trueskill_set['tau'],
+                    draw_probability=trueskill_set['draw_probability'])
+ts_env.make_as_global()
+
+# load R package PlayerRatings
+base = importr('base')
+utils = importr('utils')
+## only need to install once ##
+# utils.install_packages('PlayerRatings')
+# utils.chooseCRANmirror(ind=65)
+pyPR = importr('PlayerRatings')
 
 # select rating systems
-rtg_sys = {
-'Log5':True,
-'Elo':True,
-'Improved_Elo':True,
-'Glicko':True,
-'Stephenson':True
-}
-# adjust parameters of systems in systems/settings
+## doesn't work right now ##
+# rtg_sys = {
+# 'Log5':True,
+# 'Elo':True,
+# 'Improved_Elo':True,
+# 'Glicko':True,
+# 'TrueSkill':True
+# }
 
-# helper funx
+# initialize team directory
 def init_td(teams):
     team_dir = {}
     for team in teams:
         team_dir[team] = Team(team)
     return team_dir
-
-def l5_x(pa, pb):
-    if pa == pb:
-        return 0.5
-    return (pa - (pa * pb))/((pa + pb) - (2 * pa * pb))
-
-def calc_error(expected_array, result):
-    if result == 1:
-        return [-log(p) for p in expected_array]
-    else:
-        return [-log(1-p) for p in expected_array]
 
 # main func
 def test_systems():
@@ -58,7 +66,7 @@ def test_systems():
     for season in tqdm(seasons):
         sea_df = sdf.loc[sdf.Season==season]
 
-        # sort in order (DayNum inspired by kaggle)
+        # sort in order
         sea_df = sea_df.sort_values(by='DayNum')
         sea_df = sea_df[['Season','DayNum','WTeam','WScore','LTeam','LScore']]
 
@@ -73,38 +81,14 @@ def test_systems():
         # init classes
         elo = Elo()
         glicko = Glicko()
-        steph = Steph()
-
-        # test glicko
-        # team1 = Team(1)
-        # t2 = Team(2)
-        # t3 = Team(3)
-        # t4 = Team(4)
-        #
-        # team1.glicko = 1500
-        # t2.glicko = 1400
-        # t3.glicko = 1550
-        # t4.glicko = 1700
-        #
-        # team1.g_phi = 200
-        # t2.g_phi = 30
-        # t3.g_phi = 100
-        # t4.g_phi = 300
-        #
-        # team1.add_glicko_opp(t2,1)
-        # team1.add_glicko_opp(t3,0)
-        # team1.add_glicko_opp(t4,0)
-        #
-        # team1 = glicko.update(team1)
-        # print(team1.glicko, team1.g_phi, team1.g_sigma)
-        # raise ValueError
 
         # track error per week
         week_err = []
-        wk_l5err = wk_eloerr = wk_ieloerr = wk_gerr = wk_serr = 0
+        wk_l5err = wk_eloerr = wk_ieloerr = wk_gerr = wk_tserr = 0
         wk_gp = 0
         wk_thres = 7
         wk_cnt = 0
+
         # iterate games
         for index, row in sea_df.iterrows():
             t1 = row['WTeam']
@@ -112,6 +96,7 @@ def test_systems():
             team1 = team_dir[t1]
             team2 = team_dir[t2]
 
+            # set max number of games for testing
             # if (team1.gp > 11):
             #     continue
             # if (team2.gp > 11):
@@ -121,17 +106,21 @@ def test_systems():
             day_num = row['DayNum']
             if day_num > wk_thres:
                 # it's a new week
+                # add end date of next week
                 wk_thres += 7
+                # ignore weeks that don't have games
                 if wk_gp > 0:
                     wk_l5err /= wk_gp
                     wk_eloerr /= wk_gp
                     wk_ieloerr /= wk_gp
                     wk_gerr /= wk_gp
-                    wk_serr /= wk_gp
-                    week_err.append([season,wk_cnt,wk_l5err,wk_eloerr,wk_ieloerr,wk_gerr,wk_serr])
-                    wk_cnt += 1
-                    wk_l5err = wk_eloerr = wk_ieloerr = wk_gerr = wk_serr = 0
-                    wk_gp = 0
+                    wk_tserr /= wk_gp
+                    week_err.append([season,wk_cnt,wk_l5err,wk_eloerr,wk_ieloerr,wk_gerr,wk_tserr])
+                wk_cnt += 1
+                wk_l5err = wk_eloerr = wk_ieloerr = wk_gerr = wk_serr = 0
+                wk_gp = 0
+
+            # track games played this week
             wk_gp += 1
 
             margin = row['WScore'] - row['LScore']
@@ -140,16 +129,18 @@ def test_systems():
             log5_expect = l5_x(team1.wl, team2.wl)
             elo_expect = elo.x(team1.elo, team2.elo)
             ielo_expect = elo.x(team1.ielo, team2.ielo)
+            ts_expect = ts_win_prob([team1.tskill], [team2.tskill])
 
-            glicko_expect = 0.5
-            steph_expect = 0.5
-            # glicko_expect = glicko.x(team1, team2)
-            # steph_expect = steph.x(team1, team2)
+            # special steps for glicko expectation
+            mu, phi = glicko.scale_down(team1.glicko, team1.g_phi)
+            mu2, phi2 = glicko.scale_down(team2.glicko, team2.g_phi)
+            impact = glicko.reduce_impact(phi2)
+            glicko_expect = glicko.get_expected(mu, mu2, impact)
 
             # update error
             if log5_expect == 0:
                 log5_expect += .001
-            expects = [log5_expect, elo_expect, ielo_expect, glicko_expect, steph_expect]
+            expects = [log5_expect, elo_expect, ielo_expect, glicko_expect, ts_expect]
             t1_errors = calc_error(expects, 1)
             t2_errors = t1_errors
             team1.update_errors(t1_errors)
@@ -160,9 +151,9 @@ def test_systems():
             wk_eloerr += t1_errors[1]
             wk_ieloerr += t1_errors[2]
             wk_gerr += t1_errors[3]
-            wk_serr += t1_errors[4]
+            wk_tserr += t1_errors[4]
 
-            # update ratings
+            ## update ratings ##
 
             # elo
             elo_delta = elo.get_delta(elo_expect)
@@ -174,12 +165,14 @@ def test_systems():
             team2.update_rating("elo", -elo_delta)
             team2.update_rating("ielo", t2_ielo_delta)
 
-            # log5
+            team1.update_ts(team2.tskill, "won")
+            team2.update_ts(team1.tskill, "lost")
 
+            # log5
             team1.add_win()
             team2.add_loss()
 
-            # glicko
+            # glicko (second arg is win or loss)
             team1.add_glicko_opp(team2, 1)
             team2.add_glicko_opp(team1, 0)
 
@@ -189,11 +182,13 @@ def test_systems():
             if team2.gp % g_resolve == 0:
                 team2 = glicko.update(team2)
 
+
+
             team_dir[t1] = team1
             team_dir[t2] = team2
 
         # add week_err df to season trackers
-        week_err = pd.DataFrame(week_err,columns=['Season','Week','Log5','Elo','IElo','Glicko','Steph'])
+        week_err = pd.DataFrame(week_err,columns=['Season','Week','Log5','Elo','IElo','Glicko','TS'])
         if wkbywk_err is None:
             wkbywk_err = week_err
         else:
@@ -205,27 +200,27 @@ def test_systems():
         sea_eloerr = 0
         sea_ieloerr = 0
         sea_gerr = 0
-        sea_serr = 0
+        sea_tserr = 0
         for team in team_dir.values():
             sea_gp += team.gp
             sea_l5err += team.l5err
             sea_eloerr += team.eloerr
             sea_ieloerr += team.ieloerr
             sea_gerr += team.glickoerr
-            sea_serr += team.stepherr
+            sea_tserr += team.tserr
         sea_l5err /= sea_gp
         sea_eloerr /= sea_gp
         sea_ieloerr /= sea_gp
         sea_gerr /= sea_gp
-        sea_serr /= sea_gp
+        sea_tserr /= sea_gp
 
-        sea_error.append([season,sea_l5err,sea_eloerr,sea_ieloerr,sea_gerr,sea_serr])
+        sea_error.append([season,sea_l5err,sea_eloerr,sea_ieloerr,sea_gerr,sea_tserr])
 
-    final_table = pd.DataFrame(sea_error, columns=['Season','Log5','Elo','IElo','Glicko','Steph'])
+    final_table = pd.DataFrame(sea_error, columns=['Season','Log5','Elo','IElo','Glicko','TS'])
     print(final_table)
     print(final_table.mean())
 
-    wkbywk = pd.DataFrame(wkbywk_err, columns=['Season','Week','Log5','Elo','IElo','Glicko','Steph'])
+    wkbywk = pd.DataFrame(wkbywk_err, columns=['Season','Week','Log5','Elo','IElo','Glicko','TS'])
     print(wkbywk.groupby('Week').mean())
     return
 

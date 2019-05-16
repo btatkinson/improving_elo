@@ -26,6 +26,9 @@ class Glicko(object):
         super(Glicko, self).__init__()
         self.arg = arg
 
+    def scale_down(self, mu, phi):
+        return (mu - MU)/ratio, phi/ratio
+
     def get_expected(self, mu, opp_mu, impact):
         return 1. / (1 + math.exp(-impact * (mu- opp_mu)))
 

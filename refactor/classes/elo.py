@@ -30,7 +30,7 @@ class Elo(object):
 
     def get_movm(self, margin):
         # return np.log(max(abs(margin), 1) + 1.0)
-        return .145*margin
+        return .144*margin
 
     def get_acp(self, elo_diff):
         return (self.ielo_c / ((elo_diff) * self.ielo_acp + self.ielo_c))

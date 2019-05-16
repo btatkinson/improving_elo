@@ -16,15 +16,19 @@ ielo_set = {
 
 glicko_set = {
     'init':1500,
-    'phi':350,
+    'phi':168,
     'sigma':0.06,
-    'tau':1,
+    'tau':.03,
     'epsilon':0.000001,
-    'resolve_time':4
+    'resolve_time':3
 }
 
-steph_set = {
-    'init':1500,
+trueskill_set = {
+    'mu':25,
+    'sigma':5,
+    'beta':3,
+    'tau':0.13,
+    'draw_probability':0
 }
 
 

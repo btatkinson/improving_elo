@@ -22,9 +22,9 @@ def l5_x(pa, pb):
 
 def calc_error(expected_array, result):
     if result == 1:
-        return [-math.log(p) for p in expected_array]
+        return [-math.log10(p) for p in expected_array]
     else:
-        return [-math.log(1-p) for p in expected_array]
+        return [-math.log10(1-p) for p in expected_array]
 
 def ts_win_prob(team1, team2):
     delta_mu = sum(r.mu for r in team1) - sum(r.mu for r in team2)

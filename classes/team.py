@@ -16,22 +16,26 @@ ts_env = TrueSkill(mu=trueskill_set['mu'],
                     draw_probability=trueskill_set['draw_probability'])
 ts_env.make_as_global()
 
-def log_loss(true, pred, eps=1e-15):
+def log_loss(bool, pred, eps=1e-15):
     p = np.clip(pred, eps, 1-eps)
-    if true == 1:
+    if bool == 1:
         return -log(p)
     else:
         return -log(1-p)
 
 class Team(object):
     """docstring for Team."""
-    def __init__(self, tid):
+    def __init__(self, tid, ielo=ielo_set['init'], glicko=glicko_set['init']):
         super(Team, self).__init__()
         # team id
         self.tid = tid
 
         self.init_ratings()
         self.init_errors()
+
+        # used for preseason rankings
+        self.ielo = ielo
+        self.glicko = glicko
 
         self.glicko_opp = []
 
@@ -43,9 +47,6 @@ class Team(object):
         self.wl = 0.5
 
         self.elo = elo_set['init']
-        self.ielo = ielo_set['init']
-
-        self.glicko = glicko_set['init']
         self.g_phi = glicko_set['phi']
         self.g_sigma = glicko_set['sigma']
 

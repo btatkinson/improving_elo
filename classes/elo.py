@@ -41,28 +41,11 @@ class Elo(object):
         return movm * acp
 
     def get_k(self,gp):
-        k_dict = {
-            0:86,
-            1:66,
-            2:54,
-            3:44,
-            4:39,
-            5:36,
-            6:33,
-            7:30,
-            8:29,
-            9:28,
-            10:27,
-            11:26,
-            12:25,
-            13:23,
-            14:20
-        }
-        if gp in k_dict.keys():
-            x = k_dict[gp]
+        if gp <= 16:
+            k = 19.65 + math.exp((-.165*gp)+3.45)
         else:
-            x = 19.5
-        return x
+            k = 19.65
+        return k
 
     def get_ielo_delta(self, prob, margin, team1, team2):
         gamma = self.get_gamma(margin, (team1.elo-team2.elo))

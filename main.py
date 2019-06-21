@@ -1,212 +1,262 @@
 import numpy as np
 import pandas as pd
+import sys
+import itertools
+import math
 
+from helpers import *
 from settings import *
-from player import Player
-from game import Game
-from schedule import Schedule
-from glicko2 import Glicko2
+
+sys.path.insert(0, './classes')
+from team import Team
+from elo import Elo
+from glicko import Glicko
 
 from tqdm import tqdm
+from trueskill import *
 
-def create_players(league_size):
+# define trueskill environment
+ts_env = TrueSkill(mu=trueskill_set['mu'],
+                    sigma=trueskill_set['sigma'],
+                    beta=trueskill_set['beta'],
+                    tau=trueskill_set['tau'],
+                    draw_probability=trueskill_set['draw_probability'])
+ts_env.make_as_global()
 
-    players = []
-    for p in range(league_size):
-        player = Player()
-        players.append(player)
+# initialize team directory
+def init_td(teams, preseason, prev_dir):
+    team_dir = {}
+    if preseason:
+        ratings_overlap = ielo_set['ratings_overlap']
+        init_ielo = ielo_set['init']
+        for team in teams:
+            # look up preseason rankings
+            try:
+                old_team = prev_dir[team]
+            except:
+                old_team = None
 
-    return players
+            if old_team is not None:
+                preseason_ielo = (old_team.ielo * ratings_overlap) + (init_ielo * (1-ratings_overlap))
+                team_dir[team] = Team(team, ielo=preseason_ielo)
+            else:
+                team_dir[team] = Team(team)
+    else:
+        for team in teams:
+            team_dir[team] = Team(team)
+    return team_dir
 
-def play_games(matchups):
-    schedule = Schedule()
-    players_played = []
-    for matchup in matchups:
-        p1 = matchup[0]
-        p2 = matchup[1]
-        game = Game(p1, p2)
-        p1, p2 = game.play_game()
-        matchup = schedule.nudge_ratings(matchup)
-        players_played.append(matchup[0])
-        players_played.append(matchup[1])
-    return players_played
+# main func
+def test_systems():
+    # load season data
+    sdf = pd.read_csv('./data/SeasonResults.csv')
 
-def calc_error(players, week):
-    ppw = schedule_set['players_per_week']
-    num_games = (ppw * week)/2
+    # separate data into individual seasons
+    seasons = list(sdf.Season.unique())
 
-    wl_error = 0
-    wlm_error = 0
-    elo_error = 0
-    prior_error = 0
-    mov_error = 0
-    glicko_error = 0
-    combo_error = 0
-    for player in players:
-        wl_error += player.wl_error
-        wlm_error += player.wlm_error
-        elo_error += player.elo_error
-        prior_error += player.prior_error
-        mov_error += player.mov_error
-        glicko_error += player.glicko_error
-        combo_error += player.combo_error
+    # set how long before glicko updates
+    g_resolve = glicko_set['resolve_time']
 
-    # divide by 2 because averaging error between two players in game
-    wl_error = (wl_error/num_games/2)
-    wlm_error = (wlm_error/num_games/2)
-    elo_error = (elo_error/num_games/2)
-    prior_error = (prior_error/num_games/2)
-    mov_error = (mov_error/num_games/2)
-    glicko_error = (glicko_error/num_games/2)
-    combo_error = (combo_error/num_games/2)
+    # track error per season
+    sea_error = []
+    wkbywk_err = None
+    first_season = seasons[0]
+    for season in tqdm(seasons):
+        sea_df = sdf.loc[sdf.Season==season]
 
-    return [week, wl_error, wlm_error, elo_error, prior_error,
-    mov_error, glicko_error, combo_error]
+        # sort in order
+        sea_df = sea_df.sort_values(by='DayNum')
+        sea_df = sea_df[['Season','DayNum','WTeam','WScore','LTeam','LScore']]
 
-def run_season():
+        # get list of teams in season
+        wteams = list(sea_df.WTeam.unique())
+        lteams = list(sea_df.LTeam.unique())
+        teams = list(set((wteams + lteams)))
 
-    # import season settings
-    league_size = league_set['size']
-
-    # create players
-    players = create_players(league_size)
-
-
-    cols = ['Name', 'Rating', 'Prior', 'Elo', 'MOV', 'Glicko',
-    'RD', 'Vol', 'Combo', 'cRD','cVol',
-    'Wins', 'Losses', 'Ties', 'Games Played', 'WL Error', 'WLM Error',
-    'Elo Error', 'Prior Error', 'MOV Error', 'Glicko Error', 'Combo Error',
-    'Mu', 'Phi', 'Win Pct','G_OPPS','C_OPPS']
-    table_array = []
-    for player in players:
-        player_dict = player.__dict__
-        player_entry = list(player_dict.values())
-        table_array.append(player_entry)
-
-    df = pd.DataFrame(table_array, columns=cols)
-    df = df.sort_values(by='Rating', ascending=False)
-
-    df = df[['Name', 'Rating', 'Wins', 'Losses', 'Ties', 'Elo', 'MOV']]
-
-    # print(df)
-
-    # create schedule
-    # must create rating periods for Glicko
-    schedule = Schedule()
-    calendar = schedule.create_calendar()
-
-    # keep track of error throughout season
-    error_array = []
-
-    for day_num, day in tqdm(enumerate(calendar)):
-        if day == "OFF":
-            players = schedule.nudge_ratings(players)
-        elif day == "GAMES":
-            matchups,players_off = schedule.create_matchups(players)
-            players_off = schedule.nudge_ratings(players_off)
-            players_played = play_games(matchups)
-            players = players_off + players_played
+        load_preseason = False
+        # use for preseason rankings
+        if season > first_season:
+            load_preseason = True
         else:
-            matchups,players_off = schedule.create_matchups(players)
-            players_off = schedule.nudge_ratings(players_off)
-            players_played = play_games(matchups)
-            players = players_off + players_played
-            for player in players:
-                player.resolve_glicko()
-                player.resolve_combo()
+            prev_team_dir = None
 
-        # at the end of the week, add up all the errors
-        if (day_num + 1) % 7 == 0:
-            week = (day_num+1)/7
-            error_entry = calc_error(players, week)
-            error_array.append(error_entry)
+        # create team directory to track everything
+        team_dir = init_td(teams, load_preseason, prev_team_dir)
 
-            # check on max skill gap at end of week
-            max_skill_gap = league_set['max_skill_gap']
-            p_max = 0
-            p_min = player_set['initial']
-            for p in players:
-                rtg = p.rating
-                if p_max < rtg:
-                    p_max = rtg
-                elif p_min > rtg:
-                    p_min = rtg
+        # init classes
+        elo = Elo()
+        glicko = Glicko()
 
-            if p_max - p_min > max_skill_gap:
-                raise ValueError("Season was cut short after " + str(week) + " weeks because of skill gap")
+        # track error per week
+        week_err = []
+        wk_l5err = wk_eloerr = wk_ieloerr = wk_gerr = wk_tserr = 0
+        wk_gp = 0
+        wk_thres = 7
+        wk_cnt = 0
 
-    error_table = pd.DataFrame(error_array, columns=['Week', 'WL', 'WLM', 'Elo', 'Prior',
-    'MOV', 'Glicko', 'Combo'])
+        # iterate games
+        for index, row in sea_df.iterrows():
+            t1 = row['WTeam']
+            t2 = row['LTeam']
+            team1 = team_dir[t1]
+            team2 = team_dir[t2]
 
-    error_table.to_csv('Error_Analysis.csv', index=False)
+            # set max number of games for testing
+            # if (team1.gp > 11):
+            #     continue
+            # if (team2.gp > 11):
+            #     continue
 
-    table_array = []
-    for player in players:
-        player_dict = player.__dict__
-        player_entry = list(player_dict.values())
-        table_array.append(player_entry)
+            # tracking error by week, so check if it's a new week
+            day_num = row['DayNum']
+            if day_num > wk_thres:
+                # it's a new week
+                # add end date of next week
+                wk_thres += 7
+                # ignore weeks that don't have games
+                if wk_gp > 0:
+                    wk_l5err /= wk_gp
+                    wk_eloerr /= wk_gp
+                    wk_ieloerr /= wk_gp
+                    wk_gerr /= wk_gp
+                    wk_tserr /= wk_gp
+                    week_err.append([season,wk_cnt,wk_l5err,wk_eloerr,wk_ieloerr,wk_gerr,wk_tserr])
+                wk_cnt += 1
+                wk_l5err = wk_eloerr = wk_ieloerr = wk_gerr = wk_serr = 0
+                wk_gp = 0
 
-    df = pd.DataFrame(table_array, columns=cols)
-    df = df.drop(columns=["G_OPPS","C_OPPS"])
-    df = df.sort_values(by='Rating', ascending=False)
+            # track games played this week
+            wk_gp += 1
 
-    # df = df[['Name', 'Rating', 'Wins', 'Losses', 'Ties', 'Elo', 'Glicko', 'Elo Error', 'Glicko Error']]
-    # df = df.round(1)
+            margin = row['WScore'] - row['LScore']
 
-    wlm_error = df['WLM Error'].sum()
-    elo_error = df['Elo Error'].sum()
-    mov_error = df['MOV Error'].sum()
-    prior_error = df['Prior Error'].sum()
-    glicko_error = df['Glicko Error'].sum()
-    combo_error = df['Combo Error'].sum()
+            # get expected outcome for each system
+            log5_expect = l5_x(team1.wl, team2.wl)
+            elo_expect = elo.x(team1.elo, team2.elo)
+            ielo_expect = elo.x(team1.ielo, team2.ielo)
+            ts_expect = ts_win_prob([team1.tskill], [team2.tskill])
 
-    wlm_avg = np.round(wlm_error/(32*82),5)
-    e_avg = np.round(elo_error/(32*82),5)
-    mov_avg = np.round(mov_error/(32*82),5)
-    p_avg = np.round(prior_error/(32*82),5)
-    g_avg = np.round(glicko_error/(32*82),5)
-    c_avg = np.round(combo_error/(32*82),5)
-    print("Win Loss Margin Error: ", wlm_avg)
-    print("Elo Error: ", e_avg)
-    print("MOV Error: ", mov_avg)
-    print("Prior Error: ", p_avg)
-    print("Glicko Error: ", g_avg)
-    print("Combo Error: ", c_avg)
+            # special steps for glicko expectation
+            mu, phi = glicko.scale_down(team1.glicko, team1.g_phi)
+            mu2, phi2 = glicko.scale_down(team2.glicko, team2.g_phi)
+            impact = glicko.reduce_impact(phi2)
+            glicko_expect = glicko.get_expected(mu, mu2, impact)
 
-    # print(df)
+            # update error
+            if log5_expect == 0:
+                log5_expect += .001
+            expects = [log5_expect, elo_expect, ielo_expect, glicko_expect, ts_expect]
+            t1_errors = calc_error(expects, 1)
+            t2_errors = t1_errors
+            team1.update_errors(t1_errors)
+            team2.update_errors(t2_errors)
 
+            # update week error
+            wk_l5err += t1_errors[0]
+            wk_eloerr += t1_errors[1]
+            wk_ieloerr += t1_errors[2]
+            wk_gerr += t1_errors[3]
+            wk_tserr += t1_errors[4]
+
+            ## update ratings ##
+
+            # elo
+            elo_delta = elo.get_delta(elo_expect)
+            t1_ielo_delta, t2_ielo_delta = elo.get_ielo_delta(ielo_expect, margin, team1, team2)
+
+            team1.update_rating("elo", elo_delta)
+            team1.update_rating("ielo", t1_ielo_delta)
+
+            team2.update_rating("elo", -elo_delta)
+            team2.update_rating("ielo", t2_ielo_delta)
+
+            team1.update_ts(team2.tskill, "won")
+            team2.update_ts(team1.tskill, "lost")
+
+            # log5
+            team1.add_win()
+            team2.add_loss()
+
+            # glicko (second arg is win or loss)
+            team1.add_glicko_opp(team2, 1)
+            team2.add_glicko_opp(team1, 0)
+
+            # check if time to resolve
+            if team1.gp % g_resolve == 0:
+                team1 = glicko.update(team1)
+            if team2.gp % g_resolve == 0:
+                team2 = glicko.update(team2)
+
+
+
+            team_dir[t1] = team1
+            team_dir[t2] = team2
+
+        # add week_err df to season trackers
+        week_err = pd.DataFrame(week_err,columns=['Season','Week','Log5','Elo','IElo','Glicko','TS'])
+        if wkbywk_err is None:
+            wkbywk_err = week_err
+        else:
+            wkbywk_err = pd.concat([wkbywk_err,week_err])
+
+        # find total error in season
+        sea_gp = 0
+        sea_l5err = 0
+        sea_eloerr = 0
+        sea_ieloerr = 0
+        sea_gerr = 0
+        sea_tserr = 0
+        for team in team_dir.values():
+            sea_gp += team.gp
+            sea_l5err += team.l5err
+            sea_eloerr += team.eloerr
+            sea_ieloerr += team.ieloerr
+            sea_gerr += team.glickoerr
+            sea_tserr += team.tserr
+        sea_l5err /= sea_gp
+        sea_eloerr /= sea_gp
+        sea_ieloerr /= sea_gp
+        sea_gerr /= sea_gp
+        sea_tserr /= sea_gp
+
+        sea_error.append([season,sea_l5err,sea_eloerr,sea_ieloerr,sea_gerr,sea_tserr])
+
+        # store rankings for preseason rankings next season
+        prev_team_dir = team_dir
+
+    final_table = pd.DataFrame(sea_error, columns=['Season','Log5','Elo','IElo','Glicko','TS'])
+    print(final_table)
+    print(final_table.mean())
+
+    wkbywk = pd.DataFrame(wkbywk_err, columns=['Season','Week','Log5','Elo','IElo','Glicko','TS'])
+    wkbywk = wkbywk.drop(columns=['TS'])
+    wk_avg = wkbywk.groupby('Week').mean()
+
+
+    def plot_weeks(wk_avg):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(15,7))
+        plt.plot(wk_avg.index.values, wk_avg.Log5, '-k', label='Log5 Baseline')
+        plt.plot(wk_avg.index.values, wk_avg.Elo, '-c', label='Elo')
+        plt.plot(wk_avg.index.values, wk_avg.IElo, '-b', label='Improved Elo')
+        plt.plot(wk_avg.index.values, wk_avg.Glicko, '-r', label='Glicko')
+
+        plt.xlabel("Week of Season")
+        plt.ylabel("Cross Entropy Error")
+        xint = range(0, math.ceil(17)+1)
+        plt.xticks(xint)
+
+        plt.legend(loc='upper left')
+
+        plt.show()
+        return
+    plot_weeks(wk_avg)
     return
 
-
 if __name__ == "__main__":
-    # run one
-    run_season()
 
-    # run multiple
-    # elo_errors = []
-    # prior_errors = []
-    # for i in tqdm(range(5)):
-    #     ee, priore = run_season()
-    #     elo_errors.append(ee)
-    #     prior_errors.append(priore)
-    # e_avg = sum(elo_errors)/len(elo_errors)
-    # p_avg = sum(prior_errors)/len(prior_errors)
-    # e_avg = np.round(e_avg/(32*82),5)
-    # p_avg = np.round(p_avg/(32*82),5)
-    # print("Average elo error was " + str(e_avg))
-    # print("Average glicko error was " + str(p_avg))
-    # print("Difference was " + str(np.round(e_avg - p_avg,5)*100))
+    test_systems()
 
 
 
-
-
-
-
-
-
-
-
-
-
-#end
+# end

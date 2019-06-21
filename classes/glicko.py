@@ -12,14 +12,6 @@ EPSILON = glicko_set['epsilon']
 Q = math.log(10)/400
 ratio = 173.7178
 
-# class Rating(object):
-#
-#     def __init__(self, mu=MU, phi=PHI, sigma=SIGMA):
-#         self.mu = mu
-#         self.phi = phi
-#         self.sigma = sigma
-
-
 class Glicko(object):
     """docstring for Glicko."""
     def __init__(self, arg=None):
